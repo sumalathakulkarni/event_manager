@@ -72,7 +72,7 @@ jobs:
           push: true
           tags: sumalathakulkarni/eventmanager:${{ github.sha }} # Uses the Git SHA for tagging
           platforms: linux/amd64,linux/arm64 # Multi-platform support
-          cache-from: type=registry,sumalathakulkarni/eventmanager:cache
+          cache-from: type=registry,ref=sumalathakulkarni/eventmanager:cache
           cache-to: type=inline,mode=max
           
       - name: Scan the Docker image
