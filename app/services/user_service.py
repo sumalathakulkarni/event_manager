@@ -15,6 +15,7 @@ from uuid import UUID
 from app.services.email_service import EmailService
 from app.models.user_model import UserRole
 import logging
+import re
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
@@ -56,6 +57,14 @@ class UserService:
             existing_user = await cls.get_by_email(session, validated_data['email'])
             if existing_user:
                 logger.error("User with given email already exists.")
+                return None
+            name = validated_data.get("name", "")
+            if not re.match(r"^[a-zA-Z0-9\s]+$", name):
+                logger.error("Name contains invalid characters. Only letters, numbers, and spaces are allowed.")
+                return None
+            #Validate password to have minumum 12 characters
+            if len(validated_data.get("password", "")) < 12:
+                locals.error("Password must be at least 12 characters long.")
                 return None
             validated_data['hashed_password'] = hash_password(validated_data.pop('password'))
             new_user = User(**validated_data)
