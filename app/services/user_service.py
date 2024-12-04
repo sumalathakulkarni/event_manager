@@ -85,23 +85,37 @@ class UserService:
     @classmethod
     async def update(cls, session: AsyncSession, user_id: UUID, update_data: Dict[str, str]) -> Optional[User]:
         try:
-            # validated_data = UserUpdate(**update_data).dict(exclude_unset=True)
+            # Validate and prepare data for update
             validated_data = UserUpdate(**update_data).dict(exclude_unset=True)
 
+            # Hash password if included
             if 'password' in validated_data:
                 validated_data['hashed_password'] = hash_password(validated_data.pop('password'))
-            query = update(User).where(User.id == user_id).values(**validated_data).execution_options(synchronize_session="fetch")
+
+            # Prepare and execute the update query
+            query = (
+                update(User)
+                .where(User.id == user_id)
+                .values(**validated_data)
+                .execution_options(synchronize_session="fetch")
+            )
             await cls._execute_query(session, query)
+
+            # Refresh and fetch the updated user object
             updated_user = await cls.get_by_id(session, user_id)
             if updated_user:
                 session.refresh(updated_user)  # Explicitly refresh the updated user object
-                logger.info(f"User {user_id} updated successfully.")
+                logger.info(f"User {user_id} updated successfully with fields: {list(validated_data.keys())}.")
                 return updated_user
             else:
                 logger.error(f"User {user_id} not found after update attempt.")
+                return None
+
+        except ValidationError as ve:
+            logger.error(f"Validation error during user update: {ve}")
             return None
-        except Exception as e:  # Broad exception handling for debugging
-            logger.error(f"Error during user update: {e}")
+        except Exception as e:
+            logger.error(f"Unexpected error during user update: {e}")
             return None
 
     @classmethod
