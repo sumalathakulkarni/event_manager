@@ -8,7 +8,7 @@
 * https://github.com/sumalathakulkarni/event_manager/issues/16 : Resole docker deployment failure
 
 # Dockerhub Image link
-* https://hub.docker.com/repository/docker/sumalathakulkarni/eventmanager/general
+* [https://hub.docker.com/repository/docker/sumalathakulkarni/eventmanager/general](https://hub.docker.com/layers/sumalathakulkarni/eventmanager/cf596e5a11be286f46db7a583604832f9073cbfe/images/sha256-72a358360d357a5b9bd67a3b615192fdc9658d3cbd88b35c24d1d235df4a1f0e?context=repo)
   
 # Learning goals and challenges:
 This assignment helped me learn the Restful API implementation using FastAPI. I have learnt using Swagger interface to test out my APIs. I have learnt integrating PostgreSQL into my Restful API application. Learnt Docker configuration to PostgreSQL. 
