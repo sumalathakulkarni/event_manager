@@ -65,7 +65,7 @@ class UserResponse(UserBase):
     role: UserRole = Field(default=UserRole.AUTHENTICATED, example="AUTHENTICATED")
     is_professional: Optional[bool] = Field(default=False, example=True)
 
-class LoginRequest(BaseModel):
+class LoginRequest(UserBase):
     email: str = Field(..., example="john.doe@example.com")
     password: str = Field(..., example="Secure*1234")
 

@@ -15,7 +15,7 @@ async def test_user_creation(db_session, verified_user):
     stored_user = result.scalars().first()
     assert stored_user is not None
     assert stored_user.email == verified_user.email
-    assert verify_password("MySuperPassword$1234", stored_user.hashed_password)
+    assert verify_password("SecurePassword123!", stored_user.hashed_password)
 
 # Apply similar corrections to other test functions
 @pytest.mark.asyncio
@@ -44,7 +44,7 @@ async def test_bulk_user_creation_performance(db_session, users_with_same_role_5
 
 @pytest.mark.asyncio
 async def test_password_hashing(user):
-    assert verify_password("MySuperPassword$1234", user.hashed_password)
+    assert verify_password("SecurePassword123!", user.hashed_password)
 
 @pytest.mark.asyncio
 async def test_user_unlock(db_session, locked_user):

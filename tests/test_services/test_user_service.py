@@ -124,7 +124,7 @@ async def test_register_user_with_invalid_data(db_session, email_service, invali
 async def test_login_user_successful(db_session, verified_user):
     user_data = {
         "email": verified_user.email,
-        "password": "MySuperPassword$1234",
+        "password": "SecurePassword123!",
     }
     logged_in_user = await UserService.login_user(db_session, user_data["email"], user_data["password"])
     assert logged_in_user is not None
