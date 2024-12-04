@@ -15,56 +15,84 @@ from uuid import UUID
 from app.services.email_service import EmailService
 from app.models.user_model import UserRole
 import logging
-import re
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
 
 class UserService:
     @classmethod
-    async def update(cls, session: AsyncSession, user_id: UUID, update_data: Dict[str, Optional[str]]) -> Optional[User]:
+    async def _execute_query(cls, session: AsyncSession, query):
         try:
-            # Validate and exclude unset fields
+            result = await session.execute(query)
+            await session.commit()
+            return result
+        except SQLAlchemyError as e:
+            logger.error(f"Database error: {e}")
+            await session.rollback()
+            return None
+
+    @classmethod
+    async def _fetch_user(cls, session: AsyncSession, **filters) -> Optional[User]:
+        query = select(User).filter_by(**filters)
+        result = await cls._execute_query(session, query)
+        return result.scalars().first() if result else None
+
+    @classmethod
+    async def get_by_id(cls, session: AsyncSession, user_id: UUID) -> Optional[User]:
+        return await cls._fetch_user(session, id=user_id)
+
+    @classmethod
+    async def get_by_nickname(cls, session: AsyncSession, nickname: str) -> Optional[User]:
+        return await cls._fetch_user(session, nickname=nickname)
+
+    @classmethod
+    async def get_by_email(cls, session: AsyncSession, email: str) -> Optional[User]:
+        return await cls._fetch_user(session, email=email)
+
+    @classmethod
+    async def create(cls, session: AsyncSession, user_data: Dict[str, str], email_service: EmailService) -> Optional[User]:
+        try:
+            validated_data = UserCreate(**user_data).model_dump()
+            existing_user = await cls.get_by_email(session, validated_data['email'])
+            if existing_user:
+                logger.error("User with given email already exists.")
+                return None
+            validated_data['hashed_password'] = hash_password(validated_data.pop('password'))
+            new_user = User(**validated_data)
+            new_user.verification_token = generate_verification_token()
+            new_nickname = generate_nickname()
+            while await cls.get_by_nickname(session, new_nickname):
+                new_nickname = generate_nickname()
+            new_user.nickname = new_nickname
+            session.add(new_user)
+            await session.commit()
+            await email_service.send_verification_email(new_user)
+            
+            return new_user
+        except ValidationError as e:
+            logger.error(f"Validation error during user creation: {e}")
+            return None
+
+    @classmethod
+    async def update(cls, session: AsyncSession, user_id: UUID, update_data: Dict[str, str]) -> Optional[User]:
+        try:
+            # validated_data = UserUpdate(**update_data).dict(exclude_unset=True)
             validated_data = UserUpdate(**update_data).dict(exclude_unset=True)
 
-            # Log missing fields (for debugging)
-            missing_fields = [field for field, value in update_data.items() if value is None]
-            if missing_fields:
-                logger.info(f"Missing fields in the update request: {missing_fields}")
-
-            # Ensure at least one field is provided
-            if not validated_data:
-                logger.error("No fields provided for update.")
-                return None
-
-            # Hash password if included
             if 'password' in validated_data:
                 validated_data['hashed_password'] = hash_password(validated_data.pop('password'))
-
-            # Prepare and execute the update query
-            query = (
-                update(User)
-                .where(User.id == user_id)
-                .values(**validated_data)
-                .execution_options(synchronize_session="fetch")
-            )
+            query = update(User).where(User.id == user_id).values(**validated_data).execution_options(synchronize_session="fetch")
             await cls._execute_query(session, query)
-
-            # Refresh and fetch the updated user object
             updated_user = await cls.get_by_id(session, user_id)
             if updated_user:
-                session.refresh(updated_user)
-                logger.info(f"User {user_id} updated successfully with fields: {list(validated_data.keys())}.")
+                session.refresh(updated_user)  # Explicitly refresh the updated user object
+                logger.info(f"User {user_id} updated successfully.")
                 return updated_user
             else:
                 logger.error(f"User {user_id} not found after update attempt.")
-                return None
-
-        except ValidationError as ve:
-            logger.error(f"Validation error during user update: {ve}")
             return None
-        except Exception as e:
-            logger.error(f"Unexpected error during user update: {e}")
+        except Exception as e:  # Broad exception handling for debugging
+            logger.error(f"Error during user update: {e}")
             return None
 
     @classmethod
