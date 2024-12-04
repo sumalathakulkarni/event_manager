@@ -22,71 +22,20 @@ logger = logging.getLogger(__name__)
 
 class UserService:
     @classmethod
-    async def _execute_query(cls, session: AsyncSession, query):
+    async def update(cls, session: AsyncSession, user_id: UUID, update_data: Dict[str, Optional[str]]) -> Optional[User]:
         try:
-            result = await session.execute(query)
-            await session.commit()
-            return result
-        except SQLAlchemyError as e:
-            logger.error(f"Database error: {e}")
-            await session.rollback()
-            return None
-
-    @classmethod
-    async def _fetch_user(cls, session: AsyncSession, **filters) -> Optional[User]:
-        query = select(User).filter_by(**filters)
-        result = await cls._execute_query(session, query)
-        return result.scalars().first() if result else None
-
-    @classmethod
-    async def get_by_id(cls, session: AsyncSession, user_id: UUID) -> Optional[User]:
-        return await cls._fetch_user(session, id=user_id)
-
-    @classmethod
-    async def get_by_nickname(cls, session: AsyncSession, nickname: str) -> Optional[User]:
-        return await cls._fetch_user(session, nickname=nickname)
-
-    @classmethod
-    async def get_by_email(cls, session: AsyncSession, email: str) -> Optional[User]:
-        return await cls._fetch_user(session, email=email)
-
-    @classmethod
-    async def create(cls, session: AsyncSession, user_data: Dict[str, str], email_service: EmailService) -> Optional[User]:
-        try:
-            validated_data = UserCreate(**user_data).model_dump()
-            existing_user = await cls.get_by_email(session, validated_data['email'])
-            if existing_user:
-                logger.error("User with given email already exists.")
-                return None
-            name = validated_data.get("name", "")
-            if not re.match(r"^[a-zA-Z0-9\s]+$", name):
-                logger.error("Name contains invalid characters. Only letters, numbers, and spaces are allowed.")
-                return None
-            #Validate password to have minumum 12 characters
-            if len(validated_data.get("password", "")) < 12:
-                locals.error("Password must be at least 12 characters long.")
-                return None
-            validated_data['hashed_password'] = hash_password(validated_data.pop('password'))
-            new_user = User(**validated_data)
-            new_user.verification_token = generate_verification_token()
-            new_nickname = generate_nickname()
-            while await cls.get_by_nickname(session, new_nickname):
-                new_nickname = generate_nickname()
-            new_user.nickname = new_nickname
-            session.add(new_user)
-            await session.commit()
-            await email_service.send_verification_email(new_user)
-            
-            return new_user
-        except ValidationError as e:
-            logger.error(f"Validation error during user creation: {e}")
-            return None
-
-    @classmethod
-    async def update(cls, session: AsyncSession, user_id: UUID, update_data: Dict[str, str]) -> Optional[User]:
-        try:
-            # Validate and prepare data for update
+            # Validate and exclude unset fields
             validated_data = UserUpdate(**update_data).dict(exclude_unset=True)
+
+            # Log missing fields (for debugging)
+            missing_fields = [field for field, value in update_data.items() if value is None]
+            if missing_fields:
+                logger.info(f"Missing fields in the update request: {missing_fields}")
+
+            # Ensure at least one field is provided
+            if not validated_data:
+                logger.error("No fields provided for update.")
+                return None
 
             # Hash password if included
             if 'password' in validated_data:
@@ -104,7 +53,7 @@ class UserService:
             # Refresh and fetch the updated user object
             updated_user = await cls.get_by_id(session, user_id)
             if updated_user:
-                session.refresh(updated_user)  # Explicitly refresh the updated user object
+                session.refresh(updated_user)
                 logger.info(f"User {user_id} updated successfully with fields: {list(validated_data.keys())}.")
                 return updated_user
             else:
